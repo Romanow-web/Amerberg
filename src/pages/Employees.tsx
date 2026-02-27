@@ -54,7 +54,13 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
         monthlyData,
         total
       };
-    }).sort((a, b) => b.total - a.total);
+    }).sort((a, b) => {
+      // Supervisors (SV) always at the top
+      if (a.role === 'SV' && b.role !== 'SV') return -1;
+      if (a.role !== 'SV' && b.role === 'SV') return 1;
+      // Then sort by total descending
+      return b.total - a.total;
+    });
   }, [filteredEmployees, data.results, selectedMonth]);
 
   // Export to CSV
@@ -226,6 +232,9 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
                         {row.name.substring(0, 2).toUpperCase()}
                       </div>
                       <div className="text-sm font-medium text-slate-900 dark:text-white">{row.name}</div>
+                      {row.role === 'SV' && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded uppercase">SV</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
@@ -237,7 +246,10 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
                     </td>
                   ))}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 dark:text-indigo-400 sticky right-0 bg-white dark:bg-slate-800 z-10 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                    {row.total}
+                    <div className="flex flex-col items-end">
+                      <span>{row.total}</span>
+                      {row.role === 'SV' && <span className="text-[10px] text-slate-400 font-normal uppercase">Team Total</span>}
+                    </div>
                   </td>
                 </tr>
               ))}

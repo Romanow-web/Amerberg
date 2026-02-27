@@ -19,6 +19,8 @@ export interface Result {
 export interface DashboardData {
   employees: Employee[];
   results: Result[];
+  agentResults: Result[];
+  supervisorResults: Result[];
 }
 
 export interface KPI {

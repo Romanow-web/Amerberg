@@ -2,16 +2,16 @@ import { Employee, Result, DashboardData } from '../types';
 
 // Mock Data
 const MOCK_EMPLOYEES: Employee[] = [
-  { employee_id: 'E001', name: 'Serhii', team: 'Sales', status: 'active', role: 'Manager', start_date: '2024-01-01' },
-  { employee_id: 'E002', name: 'Nick', team: 'Sales', status: 'active', role: 'Sales Rep', start_date: '2024-02-01' },
-  { employee_id: 'E003', name: 'Vitalii', team: 'Support', status: 'active', role: 'Support Agent', start_date: '2024-03-01' },
-  { employee_id: 'E004', name: 'Salim', team: 'Sales', status: 'active', role: 'Sales Rep', start_date: '2024-01-15' },
-  { employee_id: 'E005', name: 'Egor', team: 'Dev', status: 'active', role: 'Developer', start_date: '2023-11-01' },
-  { employee_id: 'E006', name: 'Nazar', team: 'Dev', status: 'inactive', role: 'Developer', start_date: '2023-10-01' },
-  { employee_id: 'E007', name: 'Vlad', team: 'Marketing', status: 'active', role: 'Marketer', start_date: '2024-05-01' },
-  { employee_id: 'E008', name: 'Mansur', team: 'Sales', status: 'active', role: 'Sales Rep', start_date: '2024-04-01' },
-  { employee_id: 'E009', name: 'Anna', team: 'Support', status: 'active', role: 'Support Agent', start_date: '2024-03-15' },
-  { employee_id: 'E010', name: 'Dmytro', team: 'Dev', status: 'active', role: 'Developer', start_date: '2024-01-01' },
+  { employee_id: 'E001', name: 'Serhii (SV)', team: 'Sales', status: 'active', role: 'SV', start_date: '2024-01-01' },
+  { employee_id: 'E002', name: 'Nick', team: 'Sales', status: 'active', role: 'Agent', start_date: '2024-02-01' },
+  { employee_id: 'E003', name: 'Vitalii', team: 'Support', status: 'active', role: 'Agent', start_date: '2024-03-01' },
+  { employee_id: 'E004', name: 'Salim', team: 'Sales', status: 'active', role: 'Agent', start_date: '2024-01-15' },
+  { employee_id: 'E005', name: 'Egor', team: 'Dev', status: 'active', role: 'Agent', start_date: '2023-11-01' },
+  { employee_id: 'E006', name: 'Nazar', team: 'Dev', status: 'inactive', role: 'Agent', start_date: '2023-10-01' },
+  { employee_id: 'E007', name: 'Vlad', team: 'Marketing', status: 'active', role: 'Agent', start_date: '2024-05-01' },
+  { employee_id: 'E008', name: 'Mansur', team: 'Sales', status: 'active', role: 'Agent', start_date: '2024-04-01' },
+  { employee_id: 'E009', name: 'Anna', team: 'Support', status: 'active', role: 'Agent', start_date: '2024-03-15' },
+  { employee_id: 'E010', name: 'Dmytro', team: 'Dev', status: 'active', role: 'Agent', start_date: '2024-01-01' },
 ];
 
 const generateMockResults = (): Result[] => {
@@ -43,7 +43,7 @@ const generateMockResults = (): Result[] => {
 const MOCK_RESULTS = generateMockResults();
 
 // API Service
-const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbyKSzxazliVjaX2uPYD5bI9Oe2g8ZHyaPm9cx9pE4fhpNHVLeiP3SZofmmJsrRCYsSp/exec';
+const GOOGLE_SCRIPT_URL = (import.meta as any).env.VITE_GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbyKSzxazliVjaX2uPYD5bI9Oe2g8ZHyaPm9cx9pE4fhpNHVLeiP3SZofmmJsrRCYsSp/exec';
 
 export const api = {
   async getData(): Promise<DashboardData> {
@@ -51,9 +51,22 @@ export const api = {
       console.warn('No Google Script URL provided, using mock data.');
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const employeeMap = new Map(MOCK_EMPLOYEES.map(e => [e.employee_id, e]));
+      const agentResults = MOCK_RESULTS.filter(r => employeeMap.get(r.employee_id)?.role !== 'SV');
+      const supervisorResults = MOCK_RESULTS.filter(r => employeeMap.get(r.employee_id)?.role === 'SV');
+
+      console.log('--- DEBUG: MOCK DATA ---');
+      console.log('Total Employees:', MOCK_EMPLOYEES.length);
+      console.log('Total Results:', MOCK_RESULTS.length);
+      console.log('Agent Results (non-SV):', agentResults.length);
+      console.log('Supervisor Results (SV):', supervisorResults.length);
+
       return {
         employees: MOCK_EMPLOYEES,
-        results: MOCK_RESULTS
+        results: MOCK_RESULTS,
+        agentResults,
+        supervisorResults
       };
     }
 
@@ -76,10 +89,12 @@ export const api = {
           return emp && typeof emp === 'object' && emp.employee_id && emp.name;
         });
 
+      const employeeMap = new Map(employees.map(e => [e.employee_id, e]));
+
       // Defensive filtering for Results
       // Require: employee_id, month, metric_type
       // Require: metric_value to be a valid number (allow 0)
-      const results = (Array.isArray(rawResults) ? rawResults : [])
+      const allResults = (Array.isArray(rawResults) ? rawResults : [])
         .map((res: any) => {
           // Normalize month if it's an ISO string
           let normalizedMonth = res.month;
@@ -108,9 +123,28 @@ export const api = {
           );
         });
 
+      // Split results into agent and supervisor categories
+      const agentResults = allResults.filter(r => {
+        const emp = employeeMap.get(r.employee_id);
+        return emp && emp.role !== 'SV';
+      });
+
+      const supervisorResults = allResults.filter(r => {
+        const emp = employeeMap.get(r.employee_id);
+        return emp && emp.role === 'SV';
+      });
+
+      console.log('--- DEBUG: API DATA ---');
+      console.log('Total Employees:', employees.length);
+      console.log('Total Results:', allResults.length);
+      console.log('Agent Results (non-SV):', agentResults.length);
+      console.log('Supervisor Results (SV):', supervisorResults.length);
+
       return {
         employees,
-        results
+        results: allResults,
+        agentResults,
+        supervisorResults
       };
     } catch (error) {
       console.error('API Error:', error);

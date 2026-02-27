@@ -30,14 +30,14 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
   // Process data for charts
   const chartData = useMemo(() => {
-    if (!data?.results?.length) return [];
+    if (!data?.agentResults?.length) return [];
 
     // Get unique months sorted
-    const months = Array.from(new Set(data.results.map(r => r.month))).sort();
+    const months = Array.from(new Set(data.agentResults.map(r => r.month))).sort();
     const recentMonths = months.slice(-timeRange);
 
     return recentMonths.map(month => {
-      const monthResults = data.results.filter(r => r.month === month);
+      const monthResults = data.agentResults.filter(r => r.month === month);
       
       const entry: any = {
         name: getMonthName(month),
@@ -59,28 +59,27 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
   // Calculate KPIs
   const kpis = useMemo(() => {
-    if (!data?.results?.length) return null;
+    if (!data?.agentResults?.length) return null;
 
-    // 1) Extract unique months from results
-    const months = Array.from(new Set(data.results.map(r => r.month))).sort();
+    // 1) Extract unique months from agent results
+    const months = Array.from(new Set(data.agentResults.map(r => r.month))).sort();
     
     // 2) Set activeMonth to the latest available month
     const activeMonth = months[months.length - 1];
     const prevMonth = months.length > 1 ? months[months.length - 2] : null;
 
     // 3) Use this activeMonth for KPI filtering
-    // TEMPORARY: Disable month filtering and sum all results as requested
-    const currentResults = data.results; 
-    const prevResults: Result[] = []; 
+    const currentResults = data.agentResults.filter(r => r.month === activeMonth);
+    const prevResults = prevMonth ? data.agentResults.filter(r => r.month === prevMonth) : [];
 
     // Debug logs
-    console.log("Active month (IGNORED):", activeMonth);
-    console.log("Available months in results:", months);
-    console.log("Filtered results length (ALL):", currentResults.length);
+    console.log("Active month:", activeMonth);
+    console.log("Available months in agent results:", months);
+    console.log("Filtered agent results length:", currentResults.length);
 
     if (currentResults.length > 0) {
-      console.log("First result object:", currentResults[0]);
-      console.log("Summing values:", currentResults.map(r => r.metric_value));
+      console.log("First agent result object:", currentResults[0]);
+      console.log("Summing agent values:", currentResults.map(r => r.metric_value));
     }
 
     const currentTotal = currentResults.reduce((sum, r) => sum + r.metric_value, 0);
@@ -92,7 +91,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
     const prevAvg = prevResults.length ? prevTotal / prevResults.length : 0;
     const avgChange = prevAvg ? ((currentAvg - prevAvg) / prevAvg) * 100 : 0;
 
-    // Best performer
+    // Best performer (Agents only)
     const bestPerformerResult = currentResults.sort((a, b) => b.metric_value - a.metric_value)[0];
     const bestPerformer = bestPerformerResult 
       ? data.employees?.find(e => e.employee_id === bestPerformerResult.employee_id) 
@@ -108,13 +107,13 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
   // Determine top 5 employees for the legend/lines
   const top5Employees = useMemo(() => {
-    if (!data?.results?.length) return [];
+    if (!data?.agentResults?.length) return [];
     
     // Calculate total score for each employee across the selected range
     const scores = new Map<string, number>();
     chartData.forEach(monthData => {
       data.employees?.forEach(emp => {
-        if (monthData[emp.name]) {
+        if (emp.role !== 'SV' && monthData[emp.name]) {
           scores.set(emp.name, (scores.get(emp.name) || 0) + (monthData[emp.name] as number));
         }
       });
