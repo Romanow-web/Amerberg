@@ -1,0 +1,5 @@
+{
+  "name": "Team Performance Dashboard",
+  "description": "Interactive dashboard for tracking team and employee performance metrics, integrated with Google Sheets.",
+  "requestFramePermissions": []
+}

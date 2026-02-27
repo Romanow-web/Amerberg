@@ -1,0 +1,331 @@
+import React, { useMemo } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area
+} from 'recharts';
+import { DashboardData, Employee, Result } from '../types';
+import { formatNumber, getMonthName } from '../utils';
+import { TrendingUp, TrendingDown, Users, Award, DollarSign, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+interface DashboardProps {
+  data: DashboardData;
+  loading: boolean;
+  onRefresh?: () => void;
+}
+
+export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
+  const [chartType, setChartType] = React.useState<'total' | 'top5' | 'all'>('total');
+  const [timeRange, setTimeRange] = React.useState<number>(6); // months
+
+  // Process data for charts
+  const chartData = useMemo(() => {
+    if (!data?.results?.length) return [];
+
+    // Get unique months sorted
+    const months = Array.from(new Set(data.results.map(r => r.month))).sort();
+    const recentMonths = months.slice(-timeRange);
+
+    return recentMonths.map(month => {
+      const monthResults = data.results.filter(r => r.month === month);
+      
+      const entry: any = {
+        name: getMonthName(month),
+        date: month,
+        Total: monthResults.reduce((sum, r) => sum + r.metric_value, 0),
+      };
+
+      // Add individual employee data for 'all' or 'top5' view
+      monthResults.forEach(r => {
+        const emp = data.employees?.find(e => e.employee_id === r.employee_id);
+        if (emp) {
+          entry[emp.name] = r.metric_value;
+        }
+      });
+
+      return entry;
+    });
+  }, [data, timeRange]);
+
+  // Calculate KPIs
+  const kpis = useMemo(() => {
+    if (!data?.results?.length) return null;
+
+    // 1) Extract unique months from results
+    const months = Array.from(new Set(data.results.map(r => r.month))).sort();
+    
+    // 2) Set activeMonth to the latest available month
+    const activeMonth = months[months.length - 1];
+    const prevMonth = months.length > 1 ? months[months.length - 2] : null;
+
+    // 3) Use this activeMonth for KPI filtering
+    // TEMPORARY: Disable month filtering and sum all results as requested
+    const currentResults = data.results; 
+    const prevResults: Result[] = []; 
+
+    // Debug logs
+    console.log("Active month (IGNORED):", activeMonth);
+    console.log("Available months in results:", months);
+    console.log("Filtered results length (ALL):", currentResults.length);
+
+    if (currentResults.length > 0) {
+      console.log("First result object:", currentResults[0]);
+      console.log("Summing values:", currentResults.map(r => r.metric_value));
+    }
+
+    const currentTotal = currentResults.reduce((sum, r) => sum + r.metric_value, 0);
+    const prevTotal = prevResults.reduce((sum, r) => sum + r.metric_value, 0);
+    
+    const totalChange = prevTotal ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
+
+    const currentAvg = currentResults.length ? currentTotal / currentResults.length : 0;
+    const prevAvg = prevResults.length ? prevTotal / prevResults.length : 0;
+    const avgChange = prevAvg ? ((currentAvg - prevAvg) / prevAvg) * 100 : 0;
+
+    // Best performer
+    const bestPerformerResult = currentResults.sort((a, b) => b.metric_value - a.metric_value)[0];
+    const bestPerformer = bestPerformerResult 
+      ? data.employees?.find(e => e.employee_id === bestPerformerResult.employee_id) 
+      : null;
+
+    return {
+      total: { value: currentTotal, change: totalChange },
+      avg: { value: currentAvg, change: avgChange },
+      best: { name: bestPerformer?.name || '-', value: bestPerformerResult?.metric_value || 0 },
+      debug: { activeMonth: activeMonth, filteredCount: currentResults.length }
+    };
+  }, [data]);
+
+  // Determine top 5 employees for the legend/lines
+  const top5Employees = useMemo(() => {
+    if (!data?.results?.length) return [];
+    
+    // Calculate total score for each employee across the selected range
+    const scores = new Map<string, number>();
+    chartData.forEach(monthData => {
+      data.employees?.forEach(emp => {
+        if (monthData[emp.name]) {
+          scores.set(emp.name, (scores.get(emp.name) || 0) + (monthData[emp.name] as number));
+        }
+      });
+    });
+
+    return Array.from(scores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(entry => entry[0]);
+  }, [chartData, data.employees]);
+
+  if (loading) {
+    return <div className="animate-pulse space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[1, 2, 3].map(i => <div key={i} className="h-32 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>)}
+      </div>
+      <div className="h-96 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+    </div>;
+  }
+
+  const colors = ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#ef4444', '#3b82f6'];
+
+  return (
+    <div className="space-y-8">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Results</p>
+              <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-white">{formatNumber(kpis?.total.value || 0)}</h3>
+            </div>
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+              <DollarSign size={24} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center text-sm">
+            {kpis?.total.change !== undefined && (
+              <span className={`flex items-center font-medium ${kpis.total.change >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {kpis.total.change >= 0 ? <TrendingUp size={16} className="mr-1" /> : <TrendingDown size={16} className="mr-1" />}
+                {Math.abs(kpis.total.change).toFixed(1)}%
+              </span>
+            )}
+            <span className="text-slate-500 ml-2">vs last month</span>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Avg per Employee</p>
+              <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-white">{formatNumber(Math.round(kpis?.avg.value || 0))}</h3>
+            </div>
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded-xl text-purple-600 dark:text-purple-400">
+              <Users size={24} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center text-sm">
+             {kpis?.avg.change !== undefined && (
+              <span className={`flex items-center font-medium ${kpis.avg.change >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {kpis.avg.change >= 0 ? <TrendingUp size={16} className="mr-1" /> : <TrendingDown size={16} className="mr-1" />}
+                {Math.abs(kpis.avg.change).toFixed(1)}%
+              </span>
+            )}
+            <span className="text-slate-500 ml-2">vs last month</span>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Top Performer</p>
+              <h3 className="text-2xl font-bold mt-2 text-slate-900 dark:text-white truncate max-w-[180px]">{kpis?.best.name}</h3>
+              <p className="text-sm text-slate-500 mt-1">{kpis?.best.value} results</p>
+            </div>
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/30 rounded-xl text-amber-600 dark:text-amber-400">
+              <Award size={24} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center text-sm">
+            <span className="text-slate-500">Best result this month</span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Main Chart */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.4 }}
+        className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700"
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Performance Trends</h2>
+            {onRefresh && (
+              <button 
+                onClick={onRefresh}
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                title="Refresh Data"
+              >
+                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              </button>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex text-sm">
+              <button 
+                onClick={() => setChartType('total')}
+                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'total' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+              >
+                Total
+              </button>
+              <button 
+                onClick={() => setChartType('top5')}
+                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'top5' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+              >
+                Top 5
+              </button>
+              <button 
+                onClick={() => setChartType('all')}
+                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'all' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+              >
+                All
+              </button>
+            </div>
+
+            <select 
+              value={timeRange}
+              onChange={(e) => setTimeRange(Number(e.target.value))}
+              className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-1.5 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value={3}>Last 3 Months</option>
+              <option value={6}>Last 6 Months</option>
+              <option value={12}>Last Year</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="h-[400px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            {chartType === 'total' ? (
+              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                  itemStyle={{ color: '#1e293b' }}
+                />
+                <Area type="monotone" dataKey="Total" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+              </AreaChart>
+            ) : (
+              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                />
+                <Legend />
+                {chartType === 'top5' 
+                  ? top5Employees.map((name, index) => (
+                      <Line 
+                        key={name}
+                        type="monotone" 
+                        dataKey={name} 
+                        stroke={colors[index % colors.length]} 
+                        strokeWidth={2}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    ))
+                  : data.employees?.map((emp, index) => (
+                      <Line 
+                        key={emp.name}
+                        type="monotone" 
+                        dataKey={emp.name} 
+                        stroke={colors[index % colors.length]} 
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                    ))
+                }
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
