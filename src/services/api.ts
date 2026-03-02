@@ -153,31 +153,69 @@ export const api = {
   },
 
   async addResult(result: Omit<Result, 'id'>): Promise<Result> {
+    return this.upsertResult(result);
+  },
+
+  async upsertResult(result: Omit<Result, 'id'>): Promise<Result> {
     if (!GOOGLE_SCRIPT_URL) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const newResult = { ...result, id: Math.random().toString(36).substr(2, 9) };
-      MOCK_RESULTS.push(newResult);
-      return newResult;
+      
+      // Check if result exists
+      const existingIndex = MOCK_RESULTS.findIndex(r => 
+        r.employee_id === result.employee_id && 
+        r.month === result.month && 
+        r.metric_type === result.metric_type
+      );
+
+      if (existingIndex >= 0) {
+        // Update
+        MOCK_RESULTS[existingIndex] = { ...MOCK_RESULTS[existingIndex], ...result };
+        return MOCK_RESULTS[existingIndex];
+      } else {
+        // Create
+        const newResult = { ...result, id: Math.random().toString(36).substr(2, 9) };
+        MOCK_RESULTS.push(newResult);
+        return newResult;
+      }
     }
 
     const payload = {
-      ...result,
-      id: Date.now()
+      action: 'upsertResult',
+      data: {
+        ...result,
+        id: Date.now() // Fallback ID if creating new
+      }
     };
 
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-    });
-    
-    if (!response.ok) throw new Error('Failed to add result');
-    const savedData = await response.json();
-    return {
-      ...savedData,
-      id: String(savedData.id || payload.id)
-    };
+    try {
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8', // Use text/plain to avoid CORS preflight issues with GAS
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) throw new Error('Failed to upsert result');
+      
+      const savedData = await response.json();
+      
+      // Handle case where backend might not support upsertResult yet and returns error or null
+      if (savedData.error) {
+        console.warn('Backend returned error for upsertResult, falling back to addResult logic if needed:', savedData.error);
+        throw new Error(savedData.error);
+      }
+
+      return {
+        ...savedData,
+        id: String(savedData.id || payload.data.id)
+      };
+    } catch (error) {
+      console.error('Upsert Error:', error);
+      // Fallback for now if the script doesn't support the action structure
+      // We'll try the old addResult way if it was a "create" intent, but here we can't easily distinguish without more logic.
+      // For now, re-throw.
+      throw error;
+    }
   }
 };

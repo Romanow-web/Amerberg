@@ -199,22 +199,22 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-240px)]">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
+            <thead className="bg-slate-50 dark:bg-slate-900">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky left-0 top-0 bg-slate-50 dark:bg-slate-900 z-30">
                   Employee
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky top-0 bg-slate-50 dark:bg-slate-900 z-20">
                   Team
                 </th>
                 {months.map(m => (
-                  <th key={m} scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                  <th key={m} scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap sticky top-0 bg-slate-50 dark:bg-slate-900 z-20">
                     {getMonthName(m)}
                   </th>
                 ))}
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky right-0 bg-slate-50 dark:bg-slate-900 z-10 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky right-0 top-0 bg-slate-50 dark:bg-slate-900 z-30 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
                   Total
                 </th>
               </tr>
@@ -294,28 +294,18 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
               </div>
               
               <div className="p-6">
-                <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider">Performance History</h4>
-                <div className="space-y-3">
-                  {months.map(m => {
-                    const val = (selectedEmployee as any).monthlyData[m];
-                    return (
-                      <div key={m} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{getMonthName(m)}</span>
-                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{val || '-'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {user?.role === 'admin' && (
-                  <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-                    <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-4">Admin Actions</h4>
-                    <AddResultForm employeeId={selectedEmployee.employee_id} onAdd={() => {
-                      onDataUpdate();
-                      setSelectedEmployee(null);
-                    }} />
-                  </div>
-                )}
+                <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider">Edit Results</h4>
+                <EditResultsForm 
+                  employee={selectedEmployee} 
+                  months={months} 
+                  data={data}
+                  onUpdate={() => {
+                    onDataUpdate();
+                    // Keep modal open or close? Let's keep it open to see changes, or close it.
+                    // Requirement says "update local state so table reflects new numbers".
+                    // onDataUpdate triggers a re-fetch usually.
+                  }} 
+                />
               </div>
             </motion.div>
           </motion.div>
@@ -325,59 +315,77 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   );
 }
 
-function AddResultForm({ employeeId, onAdd }: { employeeId: string, onAdd: () => void }) {
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [value, setValue] = useState('');
-  const [loading, setLoading] = useState(false);
+function EditResultsForm({ employee, months, data, onUpdate }: { employee: Employee, months: string[], data: DashboardData, onUpdate: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  // Initialize values from existing data
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    // Show last 6 months by default or all available if less
+    const monthsToShow = months.slice(0, 6);
+    monthsToShow.forEach(m => {
+      const result = data.results.find(r => r.employee_id === employee.employee_id && r.month === m);
+      initial[m] = result ? String(result.metric_value) : '';
+    });
+    return initial;
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSave = async (month: string) => {
+    const val = values[month];
+    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+      alert('Please enter a valid non-negative number');
+      return;
+    }
+
+    setLoading(month);
     try {
-      await api.addResult({
+      await api.upsertResult({
         month: month,
-        employee_id: employeeId,
-        metric_value: Number(value),
+        employee_id: employee.employee_id,
+        metric_value: Number(val),
         metric_type: 'sales'
       });
-      onAdd();
+      
+      // Optimistic update locally would be complex without full state management, 
+      // but onUpdate() should trigger a refresh.
+      // To make it feel "optimistic", we could update the 'data' prop directly if it was mutable, but it's not.
+      // For now, we rely on the parent's onDataUpdate to refresh data.
+      onUpdate();
+      alert('Saved!');
     } catch (err) {
-      alert('Failed to add result');
+      console.error(err);
+      alert('Failed to save result');
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
+  const monthsToShow = months.slice(0, 6);
+
   return (
-    <form onSubmit={handleSubmit} className="flex gap-4 items-end">
-      <div className="flex-1">
-        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Month</label>
-        <input 
-          type="month" 
-          required
-          value={month}
-          onChange={e => setMonth(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
-        />
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 max-h-[60vh] overflow-y-auto pr-2">
+        {monthsToShow.map(m => (
+          <div key={m} className="flex items-center gap-4 bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg">
+            <div className="w-24 text-sm font-medium text-slate-700 dark:text-slate-300">
+              {getMonthName(m)}
+            </div>
+            <input 
+              type="number" 
+              value={values[m] || ''}
+              onChange={e => setValues(prev => ({ ...prev, [m]: e.target.value }))}
+              className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+              placeholder="0"
+            />
+            <button 
+              onClick={() => handleSave(m)}
+              disabled={loading === m}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 min-w-[60px]"
+            >
+              {loading === m ? '...' : 'Save'}
+            </button>
+          </div>
+        ))}
       </div>
-      <div className="flex-1">
-        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Result</label>
-        <input 
-          type="number" 
-          required
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
-          placeholder="0"
-        />
-      </div>
-      <button 
-        type="submit" 
-        disabled={loading}
-        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-      >
-        {loading ? 'Adding...' : 'Add Result'}
-      </button>
-    </form>
+    </div>
   );
 }

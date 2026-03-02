@@ -262,6 +262,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
               onChange={(e) => setTimeRange(Number(e.target.value))}
               className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-1.5 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500"
             >
+              <option value={1}>Last 1 Month</option>
               <option value={3}>Last 3 Months</option>
               <option value={6}>Last 6 Months</option>
               <option value={12}>Last Year</option>
