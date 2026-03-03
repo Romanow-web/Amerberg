@@ -7,11 +7,13 @@ export interface Employee {
   role?: string;
 }
 
+export type MetricType = 'signed_contracts' | 'cars_shipped';
+
 export interface Result {
   id: string; // unique id for the result row
   month: string; // YYYY-MM
   employee_id: string;
-  metric_type: string;
+  metric_type: MetricType;
   metric_value: number;
   notes?: string;
 }

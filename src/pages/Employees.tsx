@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { DashboardData, Employee, Result } from '../types';
+import { DashboardData, Employee, Result, MetricType } from '../types';
 import { getMonthName, parseCSV } from '../utils';
-import { Search, Filter, Download, ChevronLeft, ChevronRight, X, Upload } from 'lucide-react';
+import { Search, Filter, Download, ChevronLeft, ChevronRight, X, Upload, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -17,7 +17,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>('signed_contracts');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get all unique months
@@ -25,6 +25,9 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
     if (!data?.results) return [];
     return Array.from(new Set(data.results.map(r => r.month))).sort().reverse();
   }, [data.results]);
+
+  // Months for table display (Oldest -> Newest)
+  const tableMonths = useMemo(() => [...months].reverse(), [months]);
 
   // Filter data
   const filteredEmployees = useMemo(() => {
@@ -38,7 +41,12 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   // Pivot data for table: Employee -> { [Month]: Value, Total: Sum }
   const tableData = useMemo(() => {
     return filteredEmployees.map(emp => {
-      const empResults = data.results.filter(r => r.employee_id === emp.employee_id);
+      // Filter results by employee AND selected metric
+      const empResults = data.results.filter(r => 
+        r.employee_id === emp.employee_id && 
+        r.metric_type === selectedMetric
+      );
+      
       const monthlyData: Record<string, number> = {};
       let total = 0;
 
@@ -61,18 +69,18 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
       // Then sort by total descending
       return b.total - a.total;
     });
-  }, [filteredEmployees, data.results, selectedMonth]);
+  }, [filteredEmployees, data.results, selectedMonth, selectedMetric]);
 
   // Export to CSV
   const handleExport = () => {
-    const headers = ['Name', 'Team', 'Status', ...months, 'Total'];
+    const headers = ['Name', 'Team', 'Status', ...tableMonths, 'Total'];
     const csvRows = [
       headers.join(','),
       ...tableData.map(row => [
         row.name,
         row.team || '',
         row.status,
-        ...months.map(m => row.monthlyData[m] || 0),
+        ...tableMonths.map(m => row.monthlyData[m] || 0),
         row.total
       ].join(','))
     ];
@@ -81,7 +89,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'employee_results.csv';
+    a.download = `employee_results_${selectedMetric}.csv`;
     a.click();
   };
 
@@ -120,7 +128,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
             id: r.id || Math.random().toString(36).substr(2, 9),
             month: r.month,
             employee_id: r.employee_id,
-            metric_type: r.metric_type || 'sales',
+            metric_type: r.metric_type || selectedMetric, // Default to selected metric if not present
             metric_value: Number(r.metric_value),
             notes: r.notes
           })) as Result[];
@@ -147,8 +155,8 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-col md:flex-row justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-4 flex-1">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex items-center gap-4 flex-1 flex-wrap">
+          <div className="relative flex-1 max-w-md min-w-[200px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
@@ -158,6 +166,16 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
               className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+          
+          <select 
+            value={selectedMetric}
+            onChange={(e) => setSelectedMetric(e.target.value as MetricType)}
+            className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-2 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 font-medium"
+          >
+            <option value="signed_contracts">Signed Contracts</option>
+            <option value="cars_shipped">Cars Shipped</option>
+          </select>
+
           <div className="relative">
             <select
               value={selectedMonth}
@@ -209,7 +227,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky top-0 bg-slate-50 dark:bg-slate-900 z-20">
                   Team
                 </th>
-                {months.map(m => (
+                {tableMonths.map(m => (
                   <th key={m} scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap sticky top-0 bg-slate-50 dark:bg-slate-900 z-20">
                     {getMonthName(m)}
                   </th>
@@ -240,7 +258,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                     {row.team || '-'}
                   </td>
-                  {months.map(m => (
+                  {tableMonths.map(m => (
                     <td key={m} className="px-6 py-4 whitespace-nowrap text-sm text-right text-slate-500 dark:text-slate-400 font-mono">
                       {row.monthlyData[m] || '-'}
                     </td>
@@ -294,16 +312,20 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
               </div>
               
               <div className="p-6">
-                <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider">Edit Results</h4>
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Edit Results</h4>
+                  <div className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-medium">
+                    {selectedMetric === 'signed_contracts' ? 'Signed Contracts' : 'Cars Shipped'}
+                  </div>
+                </div>
+                
                 <EditResultsForm 
                   employee={selectedEmployee} 
                   months={months} 
                   data={data}
+                  metricType={selectedMetric}
                   onUpdate={() => {
                     onDataUpdate();
-                    // Keep modal open or close? Let's keep it open to see changes, or close it.
-                    // Requirement says "update local state so table reflects new numbers".
-                    // onDataUpdate triggers a re-fetch usually.
                   }} 
                 />
               </div>
@@ -315,24 +337,64 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   );
 }
 
-function EditResultsForm({ employee, months, data, onUpdate }: { employee: Employee, months: string[], data: DashboardData, onUpdate: () => void }) {
+function EditResultsForm({ employee, months, data, metricType, onUpdate }: { employee: Employee, months: string[], data: DashboardData, metricType: MetricType, onUpdate: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState<'delta' | 'absolute'>('delta');
+  
   // Initialize values from existing data
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     // Show last 6 months by default or all available if less
     const monthsToShow = months.slice(0, 6);
     monthsToShow.forEach(m => {
-      const result = data.results.find(r => r.employee_id === employee.employee_id && r.month === m);
-      initial[m] = result ? String(result.metric_value) : '';
+      // Initialize with empty string for delta mode, or current value for absolute mode
+      initial[m] = '';
     });
     return initial;
   });
 
+  // Reset values when edit mode changes
+  React.useEffect(() => {
+    const initial: Record<string, string> = {};
+    const monthsToShow = months.slice(0, 6);
+    monthsToShow.forEach(m => {
+      if (editMode === 'absolute') {
+        const result = data.results.find(r => r.employee_id === employee.employee_id && r.month === m && r.metric_type === metricType);
+        initial[m] = result ? String(result.metric_value) : '';
+      } else {
+        initial[m] = ''; // Delta starts empty (0)
+      }
+    });
+    setValues(initial);
+  }, [editMode, data.results, employee.employee_id, months, metricType]);
+
   const handleSave = async (month: string) => {
-    const val = values[month];
-    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-      alert('Please enter a valid non-negative number');
+    const valStr = values[month];
+    
+    // Validation
+    if (valStr === '' && editMode === 'absolute') {
+      // If absolute and empty, maybe treat as 0 or warn? Let's treat as 0 if empty in absolute mode too?
+      // Requirement says: "In 'Add delta' mode, if current value is empty -> treat as 0."
+      // For absolute, let's allow 0.
+    }
+    
+    if (valStr !== '' && isNaN(Number(valStr))) {
+      alert('Please enter a valid number');
+      return;
+    }
+
+    const inputVal = valStr === '' ? 0 : Number(valStr);
+    
+    // Calculate final value
+    let finalValue = inputVal;
+    if (editMode === 'delta') {
+      const currentResult = data.results.find(r => r.employee_id === employee.employee_id && r.month === month && r.metric_type === metricType);
+      const currentVal = currentResult ? currentResult.metric_value : 0;
+      finalValue = currentVal + inputVal;
+    }
+
+    if (finalValue < 0) {
+      alert('Resulting value cannot be negative');
       return;
     }
 
@@ -341,16 +403,18 @@ function EditResultsForm({ employee, months, data, onUpdate }: { employee: Emplo
       await api.upsertResult({
         month: month,
         employee_id: employee.employee_id,
-        metric_value: Number(val),
-        metric_type: 'sales'
+        metric_value: finalValue,
+        metric_type: metricType
       });
       
-      // Optimistic update locally would be complex without full state management, 
-      // but onUpdate() should trigger a refresh.
-      // To make it feel "optimistic", we could update the 'data' prop directly if it was mutable, but it's not.
-      // For now, we rely on the parent's onDataUpdate to refresh data.
       onUpdate();
-      alert('Saved!');
+      
+      // Reset input if delta mode
+      if (editMode === 'delta') {
+        setValues(prev => ({ ...prev, [month]: '' }));
+      }
+      
+      // Optional: show success toast/alert
     } catch (err) {
       console.error(err);
       alert('Failed to save result');
@@ -363,28 +427,71 @@ function EditResultsForm({ employee, months, data, onUpdate }: { employee: Emplo
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 max-h-[60vh] overflow-y-auto pr-2">
-        {monthsToShow.map(m => (
-          <div key={m} className="flex items-center gap-4 bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg">
-            <div className="w-24 text-sm font-medium text-slate-700 dark:text-slate-300">
-              {getMonthName(m)}
+      {/* Edit Mode Toggle */}
+      <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg w-fit mb-4">
+        <button
+          onClick={() => setEditMode('delta')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            editMode === 'delta' 
+              ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-400' 
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          Add Delta (+/-)
+        </button>
+        <button
+          onClick={() => setEditMode('absolute')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            editMode === 'absolute' 
+              ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-400' 
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+          }`}
+        >
+          Set Value
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 max-h-[50vh] overflow-y-auto pr-2">
+        {monthsToShow.map(m => {
+          const currentResult = data.results.find(r => r.employee_id === employee.employee_id && r.month === m && r.metric_type === metricType);
+          const currentVal = currentResult ? currentResult.metric_value : 0;
+
+          return (
+            <div key={m} className="flex items-center gap-4 bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg">
+              <div className="w-24">
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{getMonthName(m)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Current: {currentVal}</div>
+              </div>
+              
+              <div className="flex-1 relative">
+                <input 
+                  type="number" 
+                  value={values[m] || ''}
+                  onChange={e => setValues(prev => ({ ...prev, [m]: e.target.value }))}
+                  className={`w-full px-3 py-2 bg-white dark:bg-slate-800 border rounded-lg text-sm ${
+                    editMode === 'delta' 
+                      ? 'border-indigo-300 dark:border-indigo-700 focus:ring-indigo-500' 
+                      : 'border-slate-300 dark:border-slate-600 focus:ring-slate-500'
+                  }`}
+                  placeholder={editMode === 'delta' ? '+/-' : '0'}
+                />
+                {editMode === 'delta' && values[m] && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+                    New: {currentVal + Number(values[m])}
+                  </div>
+                )}
+              </div>
+
+              <button 
+                onClick={() => handleSave(m)}
+                disabled={loading === m}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 min-w-[60px]"
+              >
+                {loading === m ? '...' : 'Save'}
+              </button>
             </div>
-            <input 
-              type="number" 
-              value={values[m] || ''}
-              onChange={e => setValues(prev => ({ ...prev, [m]: e.target.value }))}
-              className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
-              placeholder="0"
-            />
-            <button 
-              onClick={() => handleSave(m)}
-              disabled={loading === m}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 min-w-[60px]"
-            >
-              {loading === m ? '...' : 'Save'}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

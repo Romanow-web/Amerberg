@@ -13,7 +13,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { DashboardData, Employee, Result } from '../types';
+import { DashboardData, Employee, Result, MetricType } from '../types';
 import { formatNumber, getMonthName } from '../utils';
 import { TrendingUp, TrendingDown, Users, Award, DollarSign, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -27,17 +27,21 @@ interface DashboardProps {
 export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
   const [chartType, setChartType] = React.useState<'total' | 'top5' | 'all'>('total');
   const [timeRange, setTimeRange] = React.useState<number>(6); // months
+  const [selectedMetric, setSelectedMetric] = React.useState<MetricType>('signed_contracts');
 
   // Process data for charts
   const chartData = useMemo(() => {
     if (!data?.agentResults?.length) return [];
 
+    // Filter results by selected metric
+    const filteredResults = data.agentResults.filter(r => r.metric_type === selectedMetric);
+
     // Get unique months sorted
-    const months = Array.from(new Set(data.agentResults.map(r => r.month))).sort();
+    const months = Array.from(new Set(filteredResults.map(r => r.month))).sort();
     const recentMonths = months.slice(-timeRange);
 
     return recentMonths.map(month => {
-      const monthResults = data.agentResults.filter(r => r.month === month);
+      const monthResults = filteredResults.filter(r => r.month === month);
       
       const entry: any = {
         name: getMonthName(month),
@@ -55,22 +59,25 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
       return entry;
     });
-  }, [data, timeRange]);
+  }, [data, timeRange, selectedMetric]);
 
   // Calculate KPIs
   const kpis = useMemo(() => {
     if (!data?.agentResults?.length) return null;
 
+    // Filter results by selected metric
+    const filteredResults = data.agentResults.filter(r => r.metric_type === selectedMetric);
+
     // 1) Extract unique months from agent results
-    const months = Array.from(new Set(data.agentResults.map(r => r.month))).sort();
+    const months = Array.from(new Set(filteredResults.map(r => r.month))).sort();
     
     // 2) Set activeMonth to the latest available month
     const activeMonth = months[months.length - 1];
     const prevMonth = months.length > 1 ? months[months.length - 2] : null;
 
     // 3) Use this activeMonth for KPI filtering
-    const currentResults = data.agentResults.filter(r => r.month === activeMonth);
-    const prevResults = prevMonth ? data.agentResults.filter(r => r.month === prevMonth) : [];
+    const currentResults = filteredResults.filter(r => r.month === activeMonth);
+    const prevResults = prevMonth ? filteredResults.filter(r => r.month === prevMonth) : [];
 
     // Debug logs
     console.log("Active month:", activeMonth);
@@ -103,7 +110,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
       best: { name: bestPerformer?.name || '-', value: bestPerformerResult?.metric_value || 0 },
       debug: { activeMonth: activeMonth, filteredCount: currentResults.length }
     };
-  }, [data]);
+  }, [data, selectedMetric]);
 
   // Determine top 5 employees for the legend/lines
   const top5Employees = useMemo(() => {
@@ -236,6 +243,15 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
           </div>
           
           <div className="flex flex-wrap gap-2">
+            <select 
+              value={selectedMetric}
+              onChange={(e) => setSelectedMetric(e.target.value as MetricType)}
+              className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-1.5 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 font-medium"
+            >
+              <option value="signed_contracts">Signed Contracts</option>
+              <option value="cars_shipped">Cars Shipped</option>
+            </select>
+
             <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex text-sm">
               <button 
                 onClick={() => setChartType('total')}

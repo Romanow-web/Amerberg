@@ -20,20 +20,33 @@ const generateMockResults = (): Result[] => {
   
   MOCK_EMPLOYEES.forEach(emp => {
     months.forEach(month => {
-      // Random value between 10 and 100, slightly trending up
-      const base = 20 + Math.random() * 50;
-      const trend = months.indexOf(month) * 2;
-      const value = Math.floor(base + trend + (emp.team === 'Sales' ? 30 : 0));
-      
       if (emp.status === 'inactive' && months.indexOf(month) > 3) return;
 
+      // Signed Contracts
+      const baseContracts = 20 + Math.random() * 50;
+      const trendContracts = months.indexOf(month) * 2;
+      const contractsValue = Math.floor(baseContracts + trendContracts + (emp.team === 'Sales' ? 30 : 0));
+      
       results.push({
-        id: `${emp.employee_id}-${month}`,
+        id: `${emp.employee_id}-${month}-contracts`,
         month: month,
         employee_id: emp.employee_id,
-        metric_type: 'sales',
-        metric_value: value,
+        metric_type: 'signed_contracts',
+        metric_value: contractsValue,
         notes: Math.random() > 0.8 ? 'Great job!' : undefined
+      });
+
+      // Cars Shipped
+      const baseCars = 10 + Math.random() * 30;
+      const trendCars = months.indexOf(month) * 1.5;
+      const carsValue = Math.floor(baseCars + trendCars + (emp.team === 'Sales' ? 15 : 0));
+
+      results.push({
+        id: `${emp.employee_id}-${month}-cars`,
+        month: month,
+        employee_id: emp.employee_id,
+        metric_type: 'cars_shipped',
+        metric_value: carsValue,
       });
     });
   });
