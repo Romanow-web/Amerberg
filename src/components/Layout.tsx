@@ -13,13 +13,14 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const { user, logout } = useAuth();
   const [isDark, setIsDark] = React.useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' ||
-        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
   });
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -32,8 +33,8 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col">
       {/* Navbar */}
-      <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 fixed top-0 left-0 right-0 z-50 h-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+      <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 fixed top-0 left-0 right-0 z-50 h-auto sm:h-16 bg-opacity-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
           <div className="flex justify-between h-full">
             <div className="flex items-center">
               <div className="flex-shrink-0 flex items-center gap-2">
@@ -125,14 +126,14 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-16 flex-grow w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-28 sm:mt-16 flex-grow w-full">
         {children}
       </main>
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-slate-500 dark:text-slate-400">
-          Designed by Romanow Web Studio.
+      <footer className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-4 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500 dark:text-slate-400">
+          Designed by <a href="https://rvvs.us" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium transition-colors">Romanow Web Studio</a>.
         </div>
       </footer>
     </div>

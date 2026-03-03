@@ -5,6 +5,8 @@ import { Search, Filter, Download, ChevronLeft, ChevronRight, X, Upload, Plus, M
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { Button } from '../components/Button';
+import { MetricSelector } from '../components/MetricSelector';
 
 interface EmployeeTableProps {
   data: DashboardData;
@@ -167,14 +169,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
             />
           </div>
           
-          <select 
-            value={selectedMetric}
-            onChange={(e) => setSelectedMetric(e.target.value as MetricType)}
-            className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-2 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 font-medium"
-          >
-            <option value="signed_contracts">Signed Contracts</option>
-            <option value="cars_shipped">Cars Shipped</option>
-          </select>
+          <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
 
           <div className="relative">
             <select
@@ -190,34 +185,33 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
             <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
           </div>
         </div>
-        <div className="flex gap-2">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleImport} 
-            accept=".csv" 
-            className="hidden" 
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors font-medium"
-          >
-            <Upload size={18} />
-            Import CSV
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors font-medium"
-          >
-            <Download size={18} />
-            Export CSV
-          </button>
-        </div>
+          <div className="flex gap-2">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImport} 
+              accept=".csv" 
+              className="hidden" 
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              icon={<Upload size={18} />}
+            >
+              Import CSV
+            </Button>
+            <Button
+              onClick={handleExport}
+              variant="primary"
+              icon={<Download size={18} />}
+            >
+              Export CSV
+            </Button>
+          </div>
       </div>
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="overflow-auto max-h-[calc(100vh-240px)]">
+        <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-900">
               <tr>

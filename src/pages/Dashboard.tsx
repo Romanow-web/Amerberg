@@ -17,6 +17,7 @@ import { DashboardData, Employee, Result, MetricType } from '../types';
 import { formatNumber, getMonthName } from '../utils';
 import { TrendingUp, TrendingDown, Users, Award, Check, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { MetricSelector } from '../components/MetricSelector';
 
 interface DashboardProps {
   data: DashboardData;
@@ -276,14 +277,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <select 
-              value={selectedMetric}
-              onChange={(e) => setSelectedMetric(e.target.value as MetricType)}
-              className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-1.5 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 font-medium"
-            >
-              <option value="signed_contracts">Signed Contracts</option>
-              <option value="cars_shipped">Cars Shipped</option>
-            </select>
+            <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
 
             <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex text-sm">
               <button 
