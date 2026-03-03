@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { DashboardData, Employee, Result, MetricType } from '../types';
 import { formatNumber, getMonthName } from '../utils';
-import { TrendingUp, TrendingDown, Users, Award, DollarSign, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Award, Check, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface DashboardProps {
@@ -29,19 +29,60 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
   const [timeRange, setTimeRange] = React.useState<number>(6); // months
   const [selectedMetric, setSelectedMetric] = React.useState<MetricType>('signed_contracts');
 
-  // Process data for charts
+  // Process data for charts and KPIs
+  const processedData = useMemo(() => {
+    if (!data?.agentResults?.length) return null;
+
+    // 1. Filter by Metric
+    const byMetric = data.agentResults.filter(r => r.metric_type === selectedMetric);
+
+    // 2. Get sorted unique months
+    const allMonths = Array.from(new Set(byMetric.map(r => r.month))).sort();
+    const latestMonth = allMonths[allMonths.length - 1];
+
+    // 3. Identify "Current" range months
+    const currentMonths = allMonths.slice(-timeRange);
+    
+    // 4. Identify "Previous" range months (for comparison)
+    const prevStartIndex = -timeRange * 2;
+    const prevEndIndex = -timeRange;
+    // slice supports negative indices, but we need to handle cases where we don't have enough history
+    // actually slice(-6, -3) works fine even if array is shorter
+    const previousMonths = allMonths.slice(Math.max(0, allMonths.length + prevStartIndex), Math.max(0, allMonths.length + prevEndIndex));
+
+    // 5. Filter results
+    const currentResults = byMetric.filter(r => currentMonths.includes(r.month));
+    const previousResults = byMetric.filter(r => previousMonths.includes(r.month));
+
+    return {
+      currentResults,
+      previousResults,
+      currentMonths,
+      previousMonths,
+      latestMonth
+    };
+  }, [data, selectedMetric, timeRange]);
+
+  // Debug Logging
+  useEffect(() => {
+    if (processedData) {
+      const totalKpiValue = processedData.currentResults.reduce((sum, r) => sum + r.metric_value, 0);
+      console.log('--- KPI Debug ---');
+      console.log('selectedDateRange:', timeRange);
+      console.log('latestMonth:', processedData.latestMonth);
+      console.log('filteredResults.length:', processedData.currentResults.length);
+      console.log('totalKpiValue:', totalKpiValue);
+      console.log('-----------------');
+    }
+  }, [processedData, timeRange]);
+
+  // Prepare Chart Data
   const chartData = useMemo(() => {
-    if (!data?.agentResults?.length) return [];
+    if (!processedData) return [];
+    const { currentMonths, currentResults } = processedData;
 
-    // Filter results by selected metric
-    const filteredResults = data.agentResults.filter(r => r.metric_type === selectedMetric);
-
-    // Get unique months sorted
-    const months = Array.from(new Set(filteredResults.map(r => r.month))).sort();
-    const recentMonths = months.slice(-timeRange);
-
-    return recentMonths.map(month => {
-      const monthResults = filteredResults.filter(r => r.month === month);
+    return currentMonths.map(month => {
+      const monthResults = currentResults.filter(r => r.month === month);
       
       const entry: any = {
         name: getMonthName(month),
@@ -59,58 +100,50 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
       return entry;
     });
-  }, [data, timeRange, selectedMetric]);
+  }, [processedData, data.employees]);
 
   // Calculate KPIs
   const kpis = useMemo(() => {
-    if (!data?.agentResults?.length) return null;
+    if (!processedData) return null;
+    const { currentResults, previousResults } = processedData;
 
-    // Filter results by selected metric
-    const filteredResults = data.agentResults.filter(r => r.metric_type === selectedMetric);
-
-    // 1) Extract unique months from agent results
-    const months = Array.from(new Set(filteredResults.map(r => r.month))).sort();
-    
-    // 2) Set activeMonth to the latest available month
-    const activeMonth = months[months.length - 1];
-    const prevMonth = months.length > 1 ? months[months.length - 2] : null;
-
-    // 3) Use this activeMonth for KPI filtering
-    const currentResults = filteredResults.filter(r => r.month === activeMonth);
-    const prevResults = prevMonth ? filteredResults.filter(r => r.month === prevMonth) : [];
-
-    // Debug logs
-    console.log("Active month:", activeMonth);
-    console.log("Available months in agent results:", months);
-    console.log("Filtered agent results length:", currentResults.length);
-
-    if (currentResults.length > 0) {
-      console.log("First agent result object:", currentResults[0]);
-      console.log("Summing agent values:", currentResults.map(r => r.metric_value));
-    }
-
+    // Total Results
     const currentTotal = currentResults.reduce((sum, r) => sum + r.metric_value, 0);
-    const prevTotal = prevResults.reduce((sum, r) => sum + r.metric_value, 0);
-    
+    const prevTotal = previousResults.reduce((sum, r) => sum + r.metric_value, 0);
     const totalChange = prevTotal ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
 
+    // Avg per Employee (Average per entry)
     const currentAvg = currentResults.length ? currentTotal / currentResults.length : 0;
-    const prevAvg = prevResults.length ? prevTotal / prevResults.length : 0;
+    const prevAvg = previousResults.length ? prevTotal / previousResults.length : 0;
     const avgChange = prevAvg ? ((currentAvg - prevAvg) / prevAvg) * 100 : 0;
 
-    // Best performer (Agents only)
-    const bestPerformerResult = currentResults.sort((a, b) => b.metric_value - a.metric_value)[0];
-    const bestPerformer = bestPerformerResult 
-      ? data.employees?.find(e => e.employee_id === bestPerformerResult.employee_id) 
+    // Best Performer (Sum over the selected period)
+    const employeeTotals = new Map<string, number>();
+    currentResults.forEach(r => {
+      const current = employeeTotals.get(r.employee_id) || 0;
+      employeeTotals.set(r.employee_id, current + r.metric_value);
+    });
+
+    let bestPerformerId = '';
+    let bestPerformerValue = -1;
+
+    employeeTotals.forEach((value, id) => {
+      if (value > bestPerformerValue) {
+        bestPerformerValue = value;
+        bestPerformerId = id;
+      }
+    });
+
+    const bestPerformer = bestPerformerId 
+      ? data.employees?.find(e => e.employee_id === bestPerformerId) 
       : null;
 
     return {
       total: { value: currentTotal, change: totalChange },
       avg: { value: currentAvg, change: avgChange },
-      best: { name: bestPerformer?.name || '-', value: bestPerformerResult?.metric_value || 0 },
-      debug: { activeMonth: activeMonth, filteredCount: currentResults.length }
+      best: { name: bestPerformer?.name || '-', value: bestPerformerValue === -1 ? 0 : bestPerformerValue },
     };
-  }, [data, selectedMetric]);
+  }, [processedData, data.employees]);
 
   // Determine top 5 employees for the legend/lines
   const top5Employees = useMemo(() => {
@@ -159,7 +192,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
               <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-white">{formatNumber(kpis?.total.value || 0)}</h3>
             </div>
             <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-              <DollarSign size={24} />
+              <Check size={24} />
             </div>
           </div>
           <div className="mt-4 flex items-center text-sm">
@@ -169,7 +202,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
                 {Math.abs(kpis.total.change).toFixed(1)}%
               </span>
             )}
-            <span className="text-slate-500 ml-2">vs last month</span>
+            <span className="text-slate-500 ml-2">vs previous period</span>
           </div>
         </motion.div>
 
@@ -195,7 +228,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
                 {Math.abs(kpis.avg.change).toFixed(1)}%
               </span>
             )}
-            <span className="text-slate-500 ml-2">vs last month</span>
+            <span className="text-slate-500 ml-2">vs previous period</span>
           </div>
         </motion.div>
 
@@ -216,7 +249,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
             </div>
           </div>
           <div className="mt-4 flex items-center text-sm">
-            <span className="text-slate-500">Best result this month</span>
+            <span className="text-slate-500">Best result in period</span>
           </div>
         </motion.div>
       </div>
