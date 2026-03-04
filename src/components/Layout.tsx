@@ -13,22 +13,40 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const { user, logout } = useAuth();
   const [isDark, setIsDark] = React.useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return document.documentElement.classList.contains('dark');
     }
     return false;
   });
 
-  React.useLayoutEffect(() => {
-    if (isDark) {
+  const toggleTheme = () => {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    if (newDark) {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
-  }, [isDark]);
+  };
+
+  // Sync with system theme changes if no preference is saved
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('theme')) {
+        setIsDark(e.matches);
+        if (e.matches) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col">
@@ -72,7 +90,7 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
             </div>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => setIsDark(!isDark)}
+                onClick={toggleTheme}
                 className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Toggle dark mode"
               >
