@@ -2,7 +2,7 @@ export interface Employee {
   employee_id: string;
   name: string;
   team?: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'no_active';
   start_date?: string;
   role?: string;
 }

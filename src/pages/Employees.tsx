@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Button } from '../components/Button';
 import { MetricSelector } from '../components/MetricSelector';
+import { StatusSelector, AgentStatusFilter } from '../components/StatusSelector';
 
 interface EmployeeTableProps {
   data: DashboardData;
@@ -20,6 +21,7 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<MetricType>('signed_contracts');
+  const [agentStatus, setAgentStatus] = useState<AgentStatusFilter>('active');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get all unique months
@@ -34,11 +36,15 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   // Filter data
   const filteredEmployees = useMemo(() => {
     if (!data?.employees) return [];
-    return data.employees.filter(emp => 
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.team?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [data.employees, searchTerm]);
+    return data.employees.filter(emp => {
+      const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.team?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = agentStatus === 'all' || emp.status === agentStatus;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [data.employees, searchTerm, agentStatus]);
 
   // Pivot data for table: Employee -> { [Month]: Value, Total: Sum }
   const tableData = useMemo(() => {
@@ -111,29 +117,44 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
         const isResults = rows[0].hasOwnProperty('month') && rows[0].hasOwnProperty('metric_value');
 
         if (isEmployees) {
-          const newEmployees = rows.map((r: any) => ({
-            employee_id: r.employee_id || Math.random().toString(36).substr(2, 9),
-            name: r.name,
-            team: r.team,
-            status: r.status || 'active',
-            start_date: r.start_date,
-            role: r.role
-          })) as Employee[];
+          const newEmployees = rows
+            .filter((r: any) => agentStatus === 'all' || (r.status || 'active') === agentStatus)
+            .map((r: any) => ({
+              employee_id: r.employee_id || Math.random().toString(36).substr(2, 9),
+              name: r.name,
+              team: r.team,
+              status: r.status || 'active',
+              start_date: r.start_date,
+              role: r.role
+            })) as Employee[];
           
+          if (newEmployees.length === 0 && rows.length > 0) {
+            alert('No employees imported. The imported data does not match the currently filtered status.');
+            return;
+          }
+
           onLocalDataUpdate({
             ...data,
             employees: [...data.employees, ...newEmployees]
           });
           alert(`Imported ${newEmployees.length} employees successfully!`);
         } else if (isResults) {
-          const newResults = rows.map((r: any) => ({
-            id: r.id || Math.random().toString(36).substr(2, 9),
-            month: r.month,
-            employee_id: r.employee_id,
-            metric_type: r.metric_type || selectedMetric, // Default to selected metric if not present
-            metric_value: Number(r.metric_value),
-            notes: r.notes
-          })) as Result[];
+          const filteredEmpIds = new Set(filteredEmployees.map(e => e.employee_id));
+          const newResults = rows
+            .filter((r: any) => filteredEmpIds.has(r.employee_id))
+            .map((r: any) => ({
+              id: r.id || Math.random().toString(36).substr(2, 9),
+              month: r.month,
+              employee_id: r.employee_id,
+              metric_type: r.metric_type || selectedMetric,
+              metric_value: Number(r.metric_value),
+              notes: r.notes
+            })) as Result[];
+
+          if (newResults.length === 0 && rows.length > 0) {
+            alert('No results imported. The imported data does not match the currently filtered employees.');
+            return;
+          }
 
           onLocalDataUpdate({
             ...data,
@@ -156,36 +177,52 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="flex flex-col md:flex-row justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-4 flex-1 flex-wrap">
-          <div className="relative flex-1 max-w-md min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-          
-          <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
+        <div className="flex flex-col lg:flex-row justify-between gap-4">
+          <div className="flex flex-wrap items-end gap-4 flex-1">
+            <div className="flex flex-col gap-1 flex-1 min-w-[240px]">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Search</span>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search employees or teams..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Metric</span>
+              <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Agent Status</span>
+              <StatusSelector value={agentStatus} onChange={setAgentStatus} />
+            </div>
 
-          <div className="relative">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="appearance-none bg-slate-100 dark:bg-slate-700 border-none rounded-lg py-2 pl-4 pr-10 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="all">All Months</option>
-              {months.map(m => (
-                <option key={m} value={m}>{getMonthName(m)}</option>
-              ))}
-            </select>
-            <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Period</span>
+              <div className="relative">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="appearance-none bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-4 pr-10 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="all">All Months</option>
+                  {months.map(m => (
+                    <option key={m} value={m}>{getMonthName(m)}</option>
+                  ))}
+                </select>
+                <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+              </div>
+            </div>
           </div>
-        </div>
-          <div className="flex gap-2">
+
+          <div className="flex items-end gap-2">
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -196,17 +233,22 @@ export function EmployeeTable({ data, onDataUpdate, onLocalDataUpdate }: Employe
             <Button
               onClick={() => fileInputRef.current?.click()}
               icon={<Upload size={18} />}
+              size="md"
+              className="flex-1 sm:flex-none"
             >
-              Import CSV
+              Import
             </Button>
             <Button
               onClick={handleExport}
               variant="primary"
               icon={<Download size={18} />}
+              size="md"
+              className="flex-1 sm:flex-none"
             >
-              Export CSV
+              Export
             </Button>
           </div>
+        </div>
       </div>
 
       {/* Table */}

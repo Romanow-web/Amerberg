@@ -15,9 +15,10 @@ import {
 } from 'recharts';
 import { DashboardData, Employee, Result, MetricType } from '../types';
 import { formatNumber, getMonthName } from '../utils';
-import { TrendingUp, TrendingDown, Users, Award, Check, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Award, Check, RefreshCw, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { MetricSelector } from '../components/MetricSelector';
+import { StatusSelector, AgentStatusFilter } from '../components/StatusSelector';
 
 interface DashboardProps {
   data: DashboardData;
@@ -32,13 +33,24 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
 
   // Process data for charts and KPIs
   const processedData = useMemo(() => {
-    if (!data?.agentResults?.length) return null;
+    if (!data?.results?.length) return null;
 
-    // 1. Filter by Metric
-    const byMetric = data.agentResults.filter(r => r.metric_type === selectedMetric);
+    // 1. Filter by Metric, Status, and Role (Always Active and non-SV for Dashboard)
+    const employeeMap = new Map(data.employees.map(e => [e.employee_id, e]));
+    
+    // Base results for charts and KPIs (Rule: Active, non-SV, and metric_value > 0)
+    const baseResults = data.results.filter(r => {
+      const isMetric = r.metric_type === selectedMetric;
+      const emp = employeeMap.get(r.employee_id);
+      const isActive = emp && emp.status === 'active';
+      const isNotSV = emp && emp.role !== 'SV';
+      const isPositive = r.metric_value > 0;
+      return isMetric && isActive && isNotSV && isPositive;
+    });
 
     // 2. Get sorted unique months
-    const allMonths = Array.from(new Set(byMetric.map(r => r.month))).sort();
+    const allMonths = Array.from(new Set(baseResults.map(r => r.month))).sort();
+    if (allMonths.length === 0) return null;
     const latestMonth = allMonths[allMonths.length - 1];
 
     // 3. Identify "Current" range months
@@ -47,13 +59,11 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
     // 4. Identify "Previous" range months (for comparison)
     const prevStartIndex = -timeRange * 2;
     const prevEndIndex = -timeRange;
-    // slice supports negative indices, but we need to handle cases where we don't have enough history
-    // actually slice(-6, -3) works fine even if array is shorter
     const previousMonths = allMonths.slice(Math.max(0, allMonths.length + prevStartIndex), Math.max(0, allMonths.length + prevEndIndex));
 
     // 5. Filter results
-    const currentResults = byMetric.filter(r => currentMonths.includes(r.month));
-    const previousResults = byMetric.filter(r => previousMonths.includes(r.month));
+    const currentResults = baseResults.filter(r => currentMonths.includes(r.month));
+    const previousResults = baseResults.filter(r => previousMonths.includes(r.month));
 
     return {
       currentResults,
@@ -113,7 +123,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
     const prevTotal = previousResults.reduce((sum, r) => sum + r.metric_value, 0);
     const totalChange = prevTotal ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
 
-    // Avg per Employee (Average per entry)
+    // Avg per Employee (Denominator already excludes 0s due to baseResults filtering)
     const currentAvg = currentResults.length ? currentTotal / currentResults.length : 0;
     const prevAvg = previousResults.length ? prevTotal / previousResults.length : 0;
     const avgChange = prevAvg ? ((currentAvg - prevAvg) / prevAvg) * 100 : 0;
@@ -276,40 +286,52 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
             )}
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
-
-            <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex text-sm">
-              <button 
-                onClick={() => setChartType('total')}
-                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'total' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-              >
-                Total
-              </button>
-              <button 
-                onClick={() => setChartType('top5')}
-                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'top5' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-              >
-                Top 5
-              </button>
-              <button 
-                onClick={() => setChartType('all')}
-                className={`px-3 py-1.5 rounded-md transition-all ${chartType === 'all' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-              >
-                All
-              </button>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Metric</span>
+              <MetricSelector value={selectedMetric} onChange={setSelectedMetric} />
             </div>
 
-            <select 
-              value={timeRange}
-              onChange={(e) => setTimeRange(Number(e.target.value))}
-              className="bg-slate-100 dark:bg-slate-700 border-none rounded-lg text-sm px-3 py-1.5 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value={1}>Last 1 Month</option>
-              <option value={3}>Last 3 Months</option>
-              <option value={6}>Last 6 Months</option>
-              <option value={12}>Last Year</option>
-            </select>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">View</span>
+              <div className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex text-xs font-bold uppercase tracking-wider">
+                <button 
+                  onClick={() => setChartType('total')}
+                  className={`px-4 py-1.5 rounded-lg transition-all ${chartType === 'total' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                >
+                  Total
+                </button>
+                <button 
+                  onClick={() => setChartType('top5')}
+                  className={`px-4 py-1.5 rounded-lg transition-all ${chartType === 'top5' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                >
+                  Top 5
+                </button>
+                <button 
+                  onClick={() => setChartType('all')}
+                  className={`px-4 py-1.5 rounded-lg transition-all ${chartType === 'all' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                >
+                  All
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Time Range</span>
+              <div className="relative">
+                <select 
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(Number(e.target.value))}
+                  className="appearance-none bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider px-4 py-2 pr-10 text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value={1}>Last 1 Month</option>
+                  <option value={3}>Last 3 Months</option>
+                  <option value={6}>Last 6 Months</option>
+                  <option value={12}>Last Year</option>
+                </select>
+                <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -353,7 +375,7 @@ export function Dashboard({ data, loading, onRefresh }: DashboardProps) {
                         activeDot={{ r: 6 }}
                       />
                     ))
-                  : data.employees?.map((emp, index) => (
+                  : data.employees?.filter(e => e.status === 'active').map((emp, index) => (
                       <Line 
                         key={emp.name}
                         type="monotone" 

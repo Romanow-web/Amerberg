@@ -13,10 +13,21 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const { user, logout } = useAuth();
   const [isDark, setIsDark] = React.useState(() => {
     if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
   });
+
+  // Initial theme application
+  React.useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
 
   const toggleTheme = () => {
     const newDark = !isDark;
@@ -51,7 +62,7 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col">
       {/* Navbar */}
-      <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 fixed top-0 left-0 right-0 z-50 h-auto sm:h-16 bg-opacity-100">
+      <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 fixed top-0 left-0 right-0 z-[100] shadow-md bg-opacity-100 dark:bg-opacity-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
           <div className="flex justify-between h-full">
             <div className="flex items-center">
@@ -69,8 +80,8 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
                   className={cn(
                     'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-full transition-colors',
                     activeTab === 'dashboard'
-                      ? 'border-indigo-500 text-gray-900 dark:text-white'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300'
                   )}
                 >
                   Dashboard
@@ -80,11 +91,11 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
                   className={cn(
                     'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-full transition-colors',
                     activeTab === 'employees'
-                      ? 'border-indigo-500 text-gray-900 dark:text-white'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300'
                   )}
                 >
-                  Employee Results
+                  Employees
                 </button>
               </div>
             </div>
@@ -118,14 +129,14 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
         </div>
         
         {/* Mobile menu tabs */}
-        <div className="sm:hidden border-t border-slate-200 dark:border-slate-700 flex">
+        <div className="sm:hidden border-t border-slate-200 dark:border-slate-700 flex bg-white dark:bg-slate-800">
           <button
             onClick={() => onTabChange('dashboard')}
             className={cn(
-              'flex-1 py-3 text-sm font-medium text-center',
+              'flex-1 py-3 text-sm font-medium text-center transition-colors border-b-2',
               activeTab === 'dashboard'
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                : 'text-gray-500 dark:text-gray-400'
+                ? 'text-indigo-600 dark:text-indigo-400 border-indigo-500'
+                : 'text-slate-500 dark:text-slate-400 border-transparent'
             )}
           >
             Dashboard
@@ -133,10 +144,10 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
           <button
             onClick={() => onTabChange('employees')}
             className={cn(
-              'flex-1 py-3 text-sm font-medium text-center',
+              'flex-1 py-3 text-sm font-medium text-center transition-colors border-b-2',
               activeTab === 'employees'
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                : 'text-gray-500 dark:text-gray-400'
+                ? 'text-indigo-600 dark:text-indigo-400 border-indigo-500'
+                : 'text-slate-500 dark:text-slate-400 border-transparent'
             )}
           >
             Employees
@@ -144,7 +155,7 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-28 sm:mt-16 flex-grow w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-32 sm:mt-20 flex-grow w-full">
         {children}
       </main>
 

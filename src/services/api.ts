@@ -7,7 +7,7 @@ const MOCK_EMPLOYEES: Employee[] = [
   { employee_id: 'E003', name: 'Vitalii', team: 'Support', status: 'active', role: 'Agent', start_date: '2024-03-01' },
   { employee_id: 'E004', name: 'Salim', team: 'Sales', status: 'active', role: 'Agent', start_date: '2024-01-15' },
   { employee_id: 'E005', name: 'Egor', team: 'Dev', status: 'active', role: 'Agent', start_date: '2023-11-01' },
-  { employee_id: 'E006', name: 'Nazar', team: 'Dev', status: 'inactive', role: 'Agent', start_date: '2023-10-01' },
+  { employee_id: 'E006', name: 'Nazar', team: 'Dev', status: 'no_active', role: 'Agent', start_date: '2023-10-01' },
   { employee_id: 'E007', name: 'Vlad', team: 'Marketing', status: 'active', role: 'Agent', start_date: '2024-05-01' },
   { employee_id: 'E008', name: 'Mansur', team: 'Sales', status: 'active', role: 'Agent', start_date: '2024-04-01' },
   { employee_id: 'E009', name: 'Anna', team: 'Support', status: 'active', role: 'Agent', start_date: '2024-03-15' },
@@ -20,7 +20,7 @@ const generateMockResults = (): Result[] => {
   
   MOCK_EMPLOYEES.forEach(emp => {
     months.forEach(month => {
-      if (emp.status === 'inactive' && months.indexOf(month) > 3) return;
+      if (emp.status === 'no_active' && months.indexOf(month) > 3) return;
 
       // Signed Contracts
       const baseContracts = 20 + Math.random() * 50;

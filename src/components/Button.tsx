@@ -14,18 +14,18 @@ export const Button: React.FC<ButtonProps> = ({
   className = '', 
   ...props 
 }) => {
-  const baseStyles = "flex items-center justify-center gap-2 transition-colors font-medium rounded-lg";
+  const baseStyles = "flex items-center justify-center gap-2 transition-all font-medium rounded-lg whitespace-nowrap";
   
   const variants = {
-    primary: "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40",
-    outline: "bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600",
-    ghost: "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+    primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-200 dark:shadow-none",
+    outline: "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600",
+    ghost: "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
   };
 
   const sizes = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-sm",
-    lg: "px-6 py-3 text-base"
+    sm: "px-2.5 py-1.5 text-xs",
+    md: "px-3.5 py-2 text-sm",
+    lg: "px-5 py-2.5 text-base"
   };
 
   return (
